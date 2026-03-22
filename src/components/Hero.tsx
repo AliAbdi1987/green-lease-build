@@ -57,6 +57,7 @@ const Hero = () => {
             </motion.a>
             <motion.a
               href="#circularity"
+              onClick={() => window.dispatchEvent(new CustomEvent("reset-circularity"))}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               className="group inline-flex items-center gap-3 rounded-full border border-hero-muted/30 px-8 py-4 text-hero-foreground font-sans font-semibold text-base transition-all hover:bg-hero-muted/10"
