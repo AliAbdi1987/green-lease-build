@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Leaf, FileText, Mail, Scale } from "lucide-react";
+import { Zap, Leaf, FileText, Mail, Scale, Copy, Check, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import type { Recommendations } from "./GreenLeaseCoach";
 
 const priorityStyles = {
@@ -20,7 +23,77 @@ interface Props {
   onReset: () => void;
 }
 
+function generateEmailDraft(results: Recommendations): { subject: string; body: string } {
+  const landlordActions = results.actions.filter(
+    (a) => a.responsible === "landlord" || a.responsible === "shared"
+  );
+
+  const subject = `Energy Efficiency Improvements – Potential ${results.total_savings_sek_month.toLocaleString()} SEK/month Savings`;
+
+  const actionsList = landlordActions.length > 0
+    ? landlordActions
+        .map(
+          (a, i) =>
+            `${i + 1}. ${a.title}\n   Estimated savings: ${a.savings_sek_month.toLocaleString()} SEK/month | CO₂ reduction: ${a.co2_kg_year} kg/year\n   Estimated cost: ${a.cost_description}\n   Priority: ${a.priority}`
+        )
+        .join("\n\n")
+    : results.actions
+        .slice(0, 5)
+        .map(
+          (a, i) =>
+            `${i + 1}. ${a.title}\n   Estimated savings: ${a.savings_sek_month.toLocaleString()} SEK/month | CO₂ reduction: ${a.co2_kg_year} kg/year\n   Estimated cost: ${a.cost_description}`
+        )
+        .join("\n\n");
+
+  const clausesSection =
+    results.green_lease_clauses.length > 0
+      ? `\n\nAs part of this initiative, I would also like to propose incorporating the following green lease clauses into our agreement:\n\n${results.green_lease_clauses
+          .map((c, i) => `${i + 1}. "${c.clause}"\n   ${c.explanation}`)
+          .join("\n\n")}`
+      : "";
+
+  const body = `Dear Landlord,
+
+I hope this message finds you well. I am writing to discuss potential energy efficiency improvements for our building that could benefit both of us.
+
+Based on a recent energy analysis, I have identified several opportunities that could reduce operating costs by up to ${results.total_savings_sek_month.toLocaleString()} SEK per month and cut CO₂ emissions by ${results.total_co2_kg_year.toLocaleString()} kg per year.
+
+Here are the key recommendations that require your involvement:
+
+${actionsList}
+${clausesSection}
+
+I believe these improvements would increase the property's value, reduce operating costs, and demonstrate our shared commitment to sustainability. I would welcome the opportunity to discuss these proposals at your convenience.
+
+Thank you for your time and consideration.
+
+Best regards,
+[Your Name]`;
+
+  return { subject, body };
+}
+
 const GreenLeaseResults = ({ results, onReset }: Props) => {
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { subject, body } = generateEmailDraft(results);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`);
+      setCopied(true);
+      toast.success("Email draft copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
+  const handleMailto = () => {
+    const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, "_blank");
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -123,7 +196,11 @@ const GreenLeaseResults = ({ results, onReset }: Props) => {
 
       {/* Action buttons */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <Button variant="outline" className="flex-1 h-12 font-sans rounded-xl">
+        <Button
+          variant="outline"
+          className="flex-1 h-12 font-sans rounded-xl"
+          onClick={() => setEmailOpen(true)}
+        >
           <Mail className="w-4 h-4 mr-2" />
           Draft Email to Landlord
         </Button>
@@ -131,6 +208,37 @@ const GreenLeaseResults = ({ results, onReset }: Props) => {
           ← New Analysis
         </Button>
       </div>
+
+      {/* Email Draft Dialog */}
+      <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Email Draft to Landlord</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider mb-1">Subject</p>
+              <p className="font-sans text-sm text-foreground bg-muted/50 rounded-lg p-3">{subject}</p>
+            </div>
+            <div>
+              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider mb-1">Body</p>
+              <pre className="font-sans text-sm text-foreground bg-muted/50 rounded-lg p-4 whitespace-pre-wrap leading-relaxed">
+                {body}
+              </pre>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button onClick={handleCopy} variant="outline" className="flex-1 rounded-xl font-sans">
+                {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                {copied ? "Copied!" : "Copy to Clipboard"}
+              </Button>
+              <Button onClick={handleMailto} className="flex-1 rounded-xl font-sans">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Open in Email App
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 };
