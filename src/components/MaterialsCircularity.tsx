@@ -9,7 +9,8 @@ import { toast } from "sonner";
 
 interface IdentifiedItem {
   name: string;
-  condition: string;
+  condition_rating: string;
+  condition_notes: string;
   estimated_value_sek: number;
   co2_saved_kg: number;
   description: string;
