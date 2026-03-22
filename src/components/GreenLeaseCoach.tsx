@@ -51,6 +51,16 @@ interface UploadedFileState {
   error?: string;
 }
 
+const PROJECT_STORAGE_KEY = "green-lease-project-id";
+
+const getOrCreateProjectId = (): string => {
+  const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
+  if (stored) return stored;
+  const id = crypto.randomUUID();
+  localStorage.setItem(PROJECT_STORAGE_KEY, id);
+  return id;
+};
+
 const GreenLeaseCoach = () => {
   const [step, setStep] = useState<"bills" | "building" | "results">("bills");
   const [avgBillSek, setAvgBillSek] = useState("");
@@ -61,7 +71,10 @@ const GreenLeaseCoach = () => {
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [results, setResults] = useState<Recommendations | null>(null);
+  const [agentSteps, setAgentSteps] = useState<any[]>([]);
+  const [regulationsSeeded, setRegulationsSeeded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectId = useRef(getOrCreateProjectId());
   const { toast } = useToast();
 
   const handleReset = () => {
