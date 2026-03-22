@@ -41,6 +41,13 @@ const Hero = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <motion.a
               href="#green-lease"
+              onClick={(e) => {
+                if (window.location.hash === "#green-lease") {
+                  e.preventDefault();
+                  window.dispatchEvent(new HashChangeEvent("hashchange"));
+                  document.getElementById("green-lease")?.scrollIntoView({ behavior: "smooth" });
+                }
+              }}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               className="group inline-flex items-center gap-3 rounded-full bg-hero-foreground px-8 py-4 text-hero-bg font-sans font-semibold text-base transition-all hover:shadow-2xl hover:shadow-hero-accent/10"

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Building2, ThermometerSun, Receipt, Upload, X, FileText, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,27 @@ const GreenLeaseCoach = () => {
   const [results, setResults] = useState<Recommendations | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const handleReset = () => {
+    setStep("bills");
+    setAvgBillSek("");
+    setUploadedFiles([]);
+    setSizeSqm("");
+    setHeatingType("");
+    setPostcode("");
+    setResults(null);
+  };
+
+  // Reset the coach when navigating back via hash link
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash === "#green-lease" && step !== "bills") {
+        handleReset();
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [step]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -174,16 +195,6 @@ const GreenLeaseCoach = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleReset = () => {
-    setStep("bills");
-    setAvgBillSek("");
-    setUploadedFiles([]);
-    setSizeSqm("");
-    setHeatingType("");
-    setPostcode("");
-    setResults(null);
   };
 
   const steps = ["Energy Bills", "Building Info", "Results"];
