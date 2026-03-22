@@ -63,13 +63,9 @@ const MaterialsCircularity = () => {
   }, []);
 
   useEffect(() => {
-    const onHashChange = () => {
-      if (window.location.hash === "#circularity") {
-        resetScan();
-      }
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    const onReset = () => resetScan();
+    window.addEventListener("reset-circularity", onReset);
+    return () => window.removeEventListener("reset-circularity", onReset);
   }, [resetScan]);
   const handleSubmit = async () => {
     if (files.length === 0) {
