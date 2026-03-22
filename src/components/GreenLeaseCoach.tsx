@@ -77,7 +77,7 @@ const GreenLeaseCoach = () => {
   // Reset the coach when navigating back via hash link
   useEffect(() => {
     const onHashChange = () => {
-      if (window.location.hash === "#green-lease" && step === "results") {
+      if (window.location.hash === "#green-lease" && step !== "bills") {
         handleReset();
       }
     };
