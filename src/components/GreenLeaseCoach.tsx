@@ -64,6 +64,17 @@ const GreenLeaseCoach = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Reset the coach when navigating back via hash link
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash === "#green-lease" && step === "results") {
+        handleReset();
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [step]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (uploadedFiles.length + files.length > 6) {
