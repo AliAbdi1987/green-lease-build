@@ -9,25 +9,29 @@ import { toast } from "sonner";
 
 interface IdentifiedItem {
   name: string;
+  disposition: "reuse" | "recycle";
+  disposition_reason: string;
   condition_rating: string;
   condition_notes: string;
   estimated_value_sek: number;
   co2_saved_kg: number;
   description: string;
   listing_text?: string;
+  recycling_suggestion?: string;
 }
 
 interface IdentifyResult {
   items: IdentifiedItem[];
-  total_value_sek: number;
+  total_reuse_value_sek: number;
   total_co2_saved_kg: number;
+  reuse_count: number;
+  recycle_count: number;
   summary?: string;
 }
 
-const statusStyles = {
-  listed: "bg-tag-green-bg text-tag-green-text",
-  pending: "bg-tag-amber-bg text-tag-amber-text",
-  "picked-up": "bg-muted text-muted-foreground",
+const dispositionStyles = {
+  reuse: "bg-tag-green-bg text-tag-green-text",
+  recycle: "bg-tag-amber-bg text-tag-amber-text",
 };
 
 const itemEmojis: Record<string, string> = {
