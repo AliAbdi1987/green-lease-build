@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Recycle, Camera, Package, TrendingUp, Truck, ChevronRight, ImagePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,23 @@ const MaterialsCircularity = () => {
   const [location, setLocation] = useState("");
   const [result, setResult] = useState<IdentifyResult | null>(null);
 
+  const resetScan = useCallback(() => {
+    setStep("upload");
+    setFiles([]);
+    setResult(null);
+    setDescription("");
+    setLocation("");
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash === "#circularity") {
+        resetScan();
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [resetScan]);
   const handleSubmit = async () => {
     if (files.length === 0) {
       toast.error("Please upload at least one photo.");
