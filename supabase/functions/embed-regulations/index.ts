@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +15,6 @@ interface RegulationChunk {
   source?: string;
 }
 
-// Swedish energy regulations and building standards reference data
 const SWEDISH_REGULATIONS: RegulationChunk[] = [
   {
     title: "BBR Energy Requirements – New Buildings",
@@ -90,28 +90,6 @@ const SWEDISH_REGULATIONS: RegulationChunk[] = [
   },
 ];
 
-async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "text-embedding-3-small",
-      input: text,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenAI embedding error: ${response.status} ${errText}`);
-  }
-
-  const data = await response.json();
-  return data.data[0].embedding;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -129,6 +107,12 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // LangChain OpenAI Embeddings
+    const embeddings = new OpenAIEmbeddings({
+      openAIApiKey: OPENAI_API_KEY,
+      modelName: "text-embedding-3-small",
+    });
+
     // Check if regulations are already embedded
     const { count } = await supabase
       .from("regulation_embeddings")
@@ -143,30 +127,30 @@ serve(async (req) => {
 
     const results: { title: string; status: string }[] = [];
 
-    for (const reg of SWEDISH_REGULATIONS) {
-      try {
-        const embedding = await getEmbedding(`${reg.title}\n\n${reg.content}`, OPENAI_API_KEY);
+    // Use LangChain embeddings.embedDocuments for batch embedding
+    const texts = SWEDISH_REGULATIONS.map((r) => `${r.title}\n\n${r.content}`);
+    const allEmbeddings = await embeddings.embedDocuments(texts);
 
+    for (let i = 0; i < SWEDISH_REGULATIONS.length; i++) {
+      const reg = SWEDISH_REGULATIONS[i];
+      try {
         const { error } = await supabase.from("regulation_embeddings").insert({
           title: reg.title,
           content: reg.content,
           category: reg.category,
           source: reg.source,
-          embedding: embedding as any,
+          embedding: allEmbeddings[i] as any,
         });
 
         if (error) throw error;
         results.push({ title: reg.title, status: "ok" });
-
-        // Small delay to avoid OpenAI rate limits
-        await new Promise((r) => setTimeout(r, 200));
       } catch (e) {
         results.push({ title: reg.title, status: `error: ${e instanceof Error ? e.message : "unknown"}` });
       }
     }
 
     return new Response(
-      JSON.stringify({ message: `Embedded ${results.filter(r => r.status === "ok").length} regulation chunks`, results }),
+      JSON.stringify({ message: `Embedded ${results.filter((r) => r.status === "ok").length} regulation chunks`, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

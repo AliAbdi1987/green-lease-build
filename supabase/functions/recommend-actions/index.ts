@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { ChatOpenAI } from "@langchain/openai";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { createClient } from "@supabase/supabase-js";
+import { RunnableSequence, RunnableLambda } from "@langchain/core/runnables";
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
+import { z } from "zod";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,46 +12,221 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────
+// ── Schemas ──────────────────────────────────────────────────────────────
 
-async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const res = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "text-embedding-3-small", input: text }),
+const BillClassificationSchema = z.object({
+  primary_energy_type: z.string().describe("Main energy source (electricity, district_heating, gas, heat_pump)"),
+  estimated_annual_kwh: z.number().describe("Estimated annual energy consumption in kWh"),
+  estimated_annual_cost_sek: z.number().describe("Estimated annual cost in SEK"),
+  cost_per_kwh: z.number().optional().describe("Effective cost per kWh in SEK"),
+  billing_pattern: z.string().optional().describe("Seasonal pattern or billing notes"),
+  efficiency_assessment: z.enum(["poor", "below_average", "average", "above_average", "good"]),
+  climate_zone_estimate: z.enum(["zone_1", "zone_2", "zone_3"]).describe("Estimated Swedish climate zone"),
+});
+
+const RecommendationSchema = z.object({
+  actions: z.array(z.object({
+    title: z.string(),
+    savings_sek_month: z.number(),
+    co2_kg_year: z.number(),
+    cost_description: z.string(),
+    priority: z.enum(["low", "medium", "high"]),
+    responsible: z.enum(["tenant", "landlord", "shared"]),
+    regulation_reference: z.string().optional().describe("Reference to relevant Swedish regulation"),
+  })),
+  total_savings_sek_month: z.number(),
+  total_co2_kg_year: z.number(),
+  green_lease_clauses: z.array(z.object({
+    clause: z.string(),
+    explanation: z.string(),
+  })),
+  climate_zone: z.string().optional(),
+  building_efficiency_rating: z.string().optional(),
+});
+
+// ── Pipeline Steps ───────────────────────────────────────────────────────
+
+function createClassifyStep(model: ChatOpenAI) {
+  const classifyModel = model.withStructuredOutput(BillClassificationSchema, {
+    name: "classify_bills",
   });
-  if (!res.ok) throw new Error(`Embedding error: ${res.status}`);
-  const data = await res.json();
-  return data.data[0].embedding;
+
+  return new RunnableLambda({
+    func: async (input: Record<string, any>) => {
+      if (!input.extractedBills?.length) {
+        return { ...input, billClassification: null, steps: [...(input.steps || []), { step: "classify_bills", result: { skipped: true }, timestamp: new Date().toISOString() }] };
+      }
+
+      const result = await classifyModel.invoke([
+        new SystemMessage("You are an energy bill classifier for Swedish buildings. Classify the bill data and determine the building's energy profile."),
+        new HumanMessage(`Classify these energy bills:\n${JSON.stringify(input.extractedBills, null, 2)}`),
+      ]);
+
+      return {
+        ...input,
+        billClassification: result,
+        steps: [...(input.steps || []), { step: "classify_bills", result, timestamp: new Date().toISOString() }],
+      };
+    },
+  });
 }
 
-async function aiCall(
-  lovableKey: string,
-  messages: { role: string; content: string }[],
-  tools?: any[],
-  toolChoice?: any
-) {
-  const body: any = { messages };
-  if (tools) body.tools = tools;
-  if (toolChoice) body.tool_choice = toolChoice;
+function createRAGStep(embeddings: OpenAIEmbeddings | null, supabaseUrl: string | null, supabaseKey: string | null) {
+  return new RunnableLambda({
+    func: async (input: Record<string, any>) => {
+      if (!embeddings || !supabaseUrl || !supabaseKey) {
+        return {
+          ...input,
+          regulationContext: "",
+          steps: [...(input.steps || []), { step: "rag_retrieval", result: { skipped: true, reason: "OpenAI API key or Supabase credentials not available" }, timestamp: new Date().toISOString() }],
+        };
+      }
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+      try {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const ragQuery = `Energy efficiency recommendations for ${input.sizeSqm}m² ${input.heatingType} building in ${input.postcode || "Sweden"} climate zone ${input.billClassification?.climate_zone_estimate || "unknown"}`;
+
+        const queryEmbedding = await embeddings.embedQuery(ragQuery);
+
+        const { data: regulations, error } = await supabase.rpc("match_regulations", {
+          query_embedding: queryEmbedding,
+          match_threshold: 0.3,
+          match_count: 5,
+        });
+
+        let regulationContext = "";
+        if (!error && regulations?.length) {
+          regulationContext = `\n\nRELEVANT SWEDISH REGULATIONS AND STANDARDS:\n${regulations
+            .map((r: any) => `[${r.category}] ${r.title} (source: ${r.source})\n${r.content}\n(relevance: ${(r.similarity * 100).toFixed(0)}%)`)
+            .join("\n\n")}`;
+        }
+
+        return {
+          ...input,
+          regulationContext,
+          steps: [...(input.steps || []), {
+            step: "rag_retrieval",
+            result: {
+              query: ragQuery,
+              matches: regulations?.map((r: any) => ({ title: r.title, category: r.category, similarity: r.similarity })) || [],
+              note: error?.message || undefined,
+            },
+            timestamp: new Date().toISOString(),
+          }],
+        };
+      } catch (ragErr) {
+        return {
+          ...input,
+          regulationContext: "",
+          steps: [...(input.steps || []), { step: "rag_retrieval", result: { error: ragErr instanceof Error ? ragErr.message : "RAG failed" }, timestamp: new Date().toISOString() }],
+        };
+      }
+    },
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    if (res.status === 429) throw new Error("RATE_LIMITED");
-    if (res.status === 402) throw new Error("CREDITS_EXHAUSTED");
-    throw new Error(`AI gateway error: ${res.status} ${errText}`);
-  }
-
-  return res.json();
 }
 
-// ── Multi-step agent pipeline ────────────────────────────────────────────
+function createRecommendStep(model: ChatOpenAI) {
+  const recModel = model.withStructuredOutput(RecommendationSchema, {
+    name: "recommend_actions",
+  });
+
+  return new RunnableLambda({
+    func: async (input: Record<string, any>) => {
+      let billContext = "";
+      if (input.extractedBills?.length) {
+        const totalCost = input.extractedBills.reduce((sum: number, b: any) => sum + (b.total_cost_sek || 0), 0);
+        const totalKwh = input.extractedBills.reduce((sum: number, b: any) => sum + (b.energy_kwh || 0), 0);
+        const avgCost = totalCost / input.extractedBills.length;
+        billContext = `EXTRACTED BILL DATA (from ${input.extractedBills.length} uploaded bills):
+- Total cost: ${totalCost} SEK
+- Total energy: ${totalKwh} kWh
+- Average cost per bill: ${avgCost.toFixed(0)} SEK
+- Energy types: ${[...new Set(input.extractedBills.map((b: any) => b.energy_type))].join(", ")}
+
+Individual bills:
+${input.extractedBills.map((b: any, i: number) => `  Bill ${i + 1}: ${b.provider_name} — ${b.total_cost_sek} SEK, ${b.energy_kwh} kWh (${b.energy_type})${b.billing_period_start ? ` [${b.billing_period_start} to ${b.billing_period_end}]` : ""}`).join("\n")}
+
+Average monthly bill: ~${avgCost.toFixed(0)} SEK`;
+      } else if (input.avgBillSek) {
+        billContext = `User-reported average monthly energy bill: ${input.avgBillSek} SEK.`;
+      }
+
+      const classificationContext = input.billClassification
+        ? `\n\nBILL CLASSIFICATION (from Step 1):
+- Primary energy: ${input.billClassification.primary_energy_type}
+- Est. annual consumption: ${input.billClassification.estimated_annual_kwh} kWh
+- Est. annual cost: ${input.billClassification.estimated_annual_cost_sek} SEK
+- Efficiency: ${input.billClassification.efficiency_assessment}
+- Climate zone: ${input.billClassification.climate_zone_estimate}`
+        : "";
+
+      const systemPrompt = `You are a Green Lease Coach AI for Swedish buildings. You have access to Swedish energy regulations and building standards to ground your recommendations.
+
+RULES:
+- All monetary values in SEK
+- CO₂ factors: district heating = 0.07 kg/kWh, electric = 0.045 kg/kWh, heat pump COP~3 so 0.015 kg/kWh, gas = 0.2 kg/kWh
+- Sort actions by cost (cheapest first)
+- Include both tenant actions and landlord requests
+- Be specific and actionable with reference to Swedish standards where applicable
+- IMPORTANT: Use bill data to ground savings estimates. Savings should not exceed 40% of average monthly bill.
+- Reference specific Swedish regulations/standards when relevant.`;
+
+      const userPrompt = `Building: ${input.sizeSqm} m², heating: ${input.heatingType}, location: ${input.postcode || "Sweden"}.
+
+${billContext}
+${classificationContext}
+${input.regulationContext || ""}
+
+Based on all this data (actual bills, classification, and relevant Swedish regulations), return realistic energy-saving recommendations.`;
+
+      const result = await recModel.invoke([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(userPrompt),
+      ]);
+
+      return {
+        ...input,
+        recommendations: result,
+        steps: [...(input.steps || []), {
+          step: "generate_recommendations",
+          result: {
+            action_count: result.actions?.length,
+            total_savings: result.total_savings_sek_month,
+            climate_zone: result.climate_zone,
+          },
+          timestamp: new Date().toISOString(),
+        }],
+      };
+    },
+  });
+}
+
+function createSaveStep(supabaseUrl: string | null, supabaseKey: string | null) {
+  return new RunnableLambda({
+    func: async (input: Record<string, any>) => {
+      if (!supabaseUrl || !supabaseKey || !input.projectId) {
+        return input;
+      }
+
+      try {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        await supabase.from("analysis_sessions").insert({
+          project_id: input.projectId,
+          building_profile: { sizeSqm: input.sizeSqm, heatingType: input.heatingType, postcode: input.postcode },
+          bill_summary: { avgBillSek: input.avgBillSek, billCount: input.extractedBills?.length || 0, classification: input.billClassification },
+          recommendations: input.recommendations,
+          agent_steps: input.steps,
+        });
+        input.steps.push({ step: "save_session", result: { saved: true }, timestamp: new Date().toISOString() });
+      } catch (saveErr) {
+        input.steps.push({ step: "save_session", result: { error: saveErr instanceof Error ? saveErr.message : "Save failed" }, timestamp: new Date().toISOString() });
+      }
+      return input;
+    },
+  });
+}
+
+// ── Main Handler ─────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -63,249 +243,53 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    const hasRAG = !!OPENAI_API_KEY && !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
-
-    const agentSteps: { step: string; result: any; timestamp: string }[] = [];
-    const addStep = (step: string, result: any) => {
-      agentSteps.push({ step, result, timestamp: new Date().toISOString() });
-    };
-
-    // ── STEP 1: Classify bills ────────────────────────────────────────────
-
-    let billClassification: any = null;
-    if (extractedBills?.length) {
-      const classifyData = await aiCall(
-        LOVABLE_API_KEY,
-        [
-          {
-            role: "system",
-            content: "You are an energy bill classifier for Swedish buildings. Classify the bill data and determine the building's energy profile.",
-          },
-          {
-            role: "user",
-            content: `Classify these energy bills:\n${JSON.stringify(extractedBills, null, 2)}`,
-          },
-        ],
-        [
-          {
-            type: "function",
-            function: {
-              name: "classify_bills",
-              description: "Classify energy bills and determine building energy profile",
-              parameters: {
-                type: "object",
-                properties: {
-                  primary_energy_type: { type: "string", description: "Main energy source (electricity, district_heating, gas, heat_pump)" },
-                  estimated_annual_kwh: { type: "number", description: "Estimated annual energy consumption in kWh" },
-                  estimated_annual_cost_sek: { type: "number", description: "Estimated annual cost in SEK" },
-                  cost_per_kwh: { type: "number", description: "Effective cost per kWh in SEK" },
-                  billing_pattern: { type: "string", description: "Seasonal pattern or billing notes" },
-                  efficiency_assessment: { type: "string", enum: ["poor", "below_average", "average", "above_average", "good"] },
-                  climate_zone_estimate: { type: "string", enum: ["zone_1", "zone_2", "zone_3"], description: "Estimated Swedish climate zone based on costs and location" },
-                },
-                required: ["primary_energy_type", "estimated_annual_kwh", "estimated_annual_cost_sek", "efficiency_assessment", "climate_zone_estimate"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        { type: "function", function: { name: "classify_bills" } }
-      );
-
-      const tc = classifyData.choices?.[0]?.message?.tool_calls?.[0];
-      if (tc) {
-        billClassification = JSON.parse(tc.function.arguments);
-        addStep("classify_bills", billClassification);
-      }
-    }
-
-    // ── STEP 2: RAG – retrieve relevant Swedish regulations ──────────────
-
-    let regulationContext = "";
-    if (hasRAG) {
-      try {
-        const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-
-        // Build a query from the building context
-        const ragQuery = `Energy efficiency recommendations for ${sizeSqm}m² ${heatingType} building in ${postcode || "Sweden"} climate zone ${billClassification?.climate_zone_estimate || "unknown"}`;
-
-        const queryEmbedding = await getEmbedding(ragQuery, OPENAI_API_KEY!);
-
-        const { data: regulations, error: ragError } = await supabase.rpc("match_regulations", {
-          query_embedding: queryEmbedding,
-          match_threshold: 0.3,
-          match_count: 5,
-        });
-
-        if (!ragError && regulations?.length) {
-          regulationContext = `\n\nRELEVANT SWEDISH REGULATIONS AND STANDARDS:\n${regulations
-            .map((r: any) => `[${r.category}] ${r.title} (source: ${r.source})\n${r.content}\n(relevance: ${(r.similarity * 100).toFixed(0)}%)`)
-            .join("\n\n")}`;
-          addStep("rag_retrieval", {
-            query: ragQuery,
-            matches: regulations.map((r: any) => ({ title: r.title, category: r.category, similarity: r.similarity })),
-          });
-        } else {
-          addStep("rag_retrieval", { query: ragQuery, matches: [], note: ragError?.message || "No matches above threshold" });
-        }
-      } catch (ragErr) {
-        addStep("rag_retrieval", { error: ragErr instanceof Error ? ragErr.message : "RAG failed" });
-      }
-    } else {
-      addStep("rag_retrieval", { skipped: true, reason: "OpenAI API key or Supabase credentials not available" });
-    }
-
-    // ── STEP 3: Generate recommendations (with classification + RAG context) ──
-
-    let billContext = "";
-    if (extractedBills?.length) {
-      const totalCost = extractedBills.reduce((sum: number, b: any) => sum + (b.total_cost_sek || 0), 0);
-      const totalKwh = extractedBills.reduce((sum: number, b: any) => sum + (b.energy_kwh || 0), 0);
-      const avgCost = totalCost / extractedBills.length;
-
-      billContext = `EXTRACTED BILL DATA (from ${extractedBills.length} uploaded bills):
-- Total cost: ${totalCost} SEK
-- Total energy: ${totalKwh} kWh
-- Average cost per bill: ${avgCost.toFixed(0)} SEK
-- Energy types: ${[...new Set(extractedBills.map((b: any) => b.energy_type))].join(", ")}
-
-Individual bills:
-${extractedBills.map((b: any, i: number) => `  Bill ${i + 1}: ${b.provider_name} — ${b.total_cost_sek} SEK, ${b.energy_kwh} kWh (${b.energy_type})${b.billing_period_start ? ` [${b.billing_period_start} to ${b.billing_period_end}]` : ""}`).join("\n")}
-
-Average monthly bill: ~${avgCost.toFixed(0)} SEK`;
-    } else if (avgBillSek) {
-      billContext = `User-reported average monthly energy bill: ${avgBillSek} SEK.`;
-    }
-
-    const classificationContext = billClassification
-      ? `\n\nBILL CLASSIFICATION (from Step 1):
-- Primary energy: ${billClassification.primary_energy_type}
-- Est. annual consumption: ${billClassification.estimated_annual_kwh} kWh
-- Est. annual cost: ${billClassification.estimated_annual_cost_sek} SEK
-- Efficiency: ${billClassification.efficiency_assessment}
-- Climate zone: ${billClassification.climate_zone_estimate}`
-      : "";
-
-    const systemPrompt = `You are a Green Lease Coach AI for Swedish buildings. You have access to Swedish energy regulations and building standards to ground your recommendations.
-
-RULES:
-- All monetary values in SEK
-- CO₂ factors: district heating = 0.07 kg/kWh, electric = 0.045 kg/kWh, heat pump COP~3 so 0.015 kg/kWh, gas = 0.2 kg/kWh
-- Sort actions by cost (cheapest first)
-- Include both tenant actions and landlord requests
-- Be specific and actionable with reference to Swedish standards where applicable
-- IMPORTANT: Use bill data to ground savings estimates. Savings should not exceed 40% of average monthly bill.
-- Reference specific Swedish regulations/standards when relevant.`;
-
-    const userPrompt = `Building: ${sizeSqm} m², heating: ${heatingType}, location: ${postcode || "Sweden"}.
-
-${billContext}
-${classificationContext}
-${regulationContext}
-
-Based on all this data (actual bills, classification, and relevant Swedish regulations), return realistic energy-saving recommendations.`;
-
-    const recData = await aiCall(
-      LOVABLE_API_KEY,
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      [
-        {
-          type: "function",
-          function: {
-            name: "recommend_actions",
-            description: "Return energy-saving recommendations grounded in regulations and actual bill data",
-            parameters: {
-              type: "object",
-              properties: {
-                actions: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      title: { type: "string" },
-                      savings_sek_month: { type: "number" },
-                      co2_kg_year: { type: "number" },
-                      cost_description: { type: "string" },
-                      priority: { type: "string", enum: ["low", "medium", "high"] },
-                      responsible: { type: "string", enum: ["tenant", "landlord", "shared"] },
-                      regulation_reference: { type: "string", description: "Reference to relevant Swedish regulation or standard, if applicable" },
-                    },
-                    required: ["title", "savings_sek_month", "co2_kg_year", "cost_description", "priority", "responsible"],
-                    additionalProperties: false,
-                  },
-                },
-                total_savings_sek_month: { type: "number" },
-                total_co2_kg_year: { type: "number" },
-                green_lease_clauses: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      clause: { type: "string" },
-                      explanation: { type: "string" },
-                    },
-                    required: ["clause", "explanation"],
-                    additionalProperties: false,
-                  },
-                },
-                climate_zone: { type: "string", description: "Determined Swedish climate zone" },
-                building_efficiency_rating: { type: "string", description: "Overall efficiency assessment" },
-              },
-              required: ["actions", "total_savings_sek_month", "total_co2_kg_year", "green_lease_clauses"],
-              additionalProperties: false,
-            },
-          },
-        },
-      ],
-      { type: "function", function: { name: "recommend_actions" } }
-    );
-
-    const recToolCall = recData.choices?.[0]?.message?.tool_calls?.[0];
-    if (!recToolCall) throw new Error("No tool call in recommendation response");
-
-    const recommendations = JSON.parse(recToolCall.function.arguments);
-    addStep("generate_recommendations", {
-      action_count: recommendations.actions?.length,
-      total_savings: recommendations.total_savings_sek_month,
-      climate_zone: recommendations.climate_zone,
+    // LangChain ChatOpenAI pointed at Lovable AI Gateway
+    const model = new ChatOpenAI({
+      openAIApiKey: LOVABLE_API_KEY,
+      configuration: { baseURL: "https://ai.gateway.lovable.dev/v1" },
+      modelName: "google/gemini-3-flash-preview",
+      temperature: 0.3,
     });
 
-    // ── STEP 4: Save analysis session for memory ─────────────────────────
+    // OpenAI Embeddings (separate from gateway)
+    const embeddings = OPENAI_API_KEY
+      ? new OpenAIEmbeddings({ openAIApiKey: OPENAI_API_KEY, modelName: "text-embedding-3-small" })
+      : null;
 
-    if (hasRAG && projectId) {
-      try {
-        const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-        await supabase.from("analysis_sessions").insert({
-          project_id: projectId,
-          building_profile: { sizeSqm, heatingType, postcode },
-          bill_summary: { avgBillSek, billCount: extractedBills?.length || 0, classification: billClassification },
-          recommendations,
-          agent_steps: agentSteps,
-        });
-        addStep("save_session", { saved: true });
-      } catch (saveErr) {
-        addStep("save_session", { error: saveErr instanceof Error ? saveErr.message : "Save failed" });
-      }
-    }
+    // Build the LangChain pipeline as a RunnableSequence
+    const pipeline = RunnableSequence.from([
+      createClassifyStep(model),
+      createRAGStep(embeddings, SUPABASE_URL ?? null, SUPABASE_SERVICE_ROLE_KEY ?? null),
+      createRecommendStep(model),
+      createSaveStep(SUPABASE_URL ?? null, SUPABASE_SERVICE_ROLE_KEY ?? null),
+    ]);
+
+    // Execute the full chain
+    const result = await pipeline.invoke({
+      sizeSqm,
+      heatingType,
+      postcode,
+      avgBillSek,
+      extractedBills,
+      projectId,
+      steps: [],
+    });
 
     return new Response(
-      JSON.stringify({ ...recommendations, agent_steps: agentSteps }),
+      JSON.stringify({ ...result.recommendations, agent_steps: result.steps }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("recommend-actions error:", e);
     const message = e instanceof Error ? e.message : "Unknown error";
 
-    if (message === "RATE_LIMITED") {
+    if (message === "RATE_LIMITED" || message.includes("429")) {
       return new Response(
         JSON.stringify({ error: "Rate limited, please try again shortly." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (message === "CREDITS_EXHAUSTED") {
+    if (message === "CREDITS_EXHAUSTED" || message.includes("402")) {
       return new Response(
         JSON.stringify({ error: "AI credits exhausted. Please add funds." }),
         { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }

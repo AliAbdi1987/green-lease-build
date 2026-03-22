@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "@langchain/core": "npm:@langchain/core@^0.3.0",
+    "@langchain/core/": "npm:@langchain/core@^0.3.0/",
+    "@langchain/openai": "npm:@langchain/openai@^0.3.0",
+    "@langchain/community": "npm:@langchain/community@^0.3.0",
+    "@langchain/community/": "npm:@langchain/community@^0.3.0/",
+    "langchain": "npm:langchain@^0.3.0",
+    "langchain/": "npm:langchain@^0.3.0/",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.49.1",
+    "zod": "npm:zod@^3.22.0"
+  }
+}
