@@ -251,20 +251,30 @@ const MaterialsCircularity = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h4 className="font-sans font-semibold text-foreground text-sm">{item.name}</h4>
-                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyles.listed}`}>
-                        Listed
+                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full shrink-0 ${dispositionStyles[item.disposition]}`}>
+                        {item.disposition === "reuse" ? "♻️ Reuse" : "🗑️ Recycle"}
                       </span>
                     </div>
+                    <p className="text-xs text-primary font-sans font-medium mb-1">{item.disposition_reason}</p>
                     <p className="text-sm text-muted-foreground font-sans mb-2">{item.condition_notes}</p>
                     <div className="flex gap-4 text-sm font-sans">
-                      <span className="font-semibold text-metric-green">
-                        {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
-                      </span>
+                      {item.disposition === "reuse" ? (
+                        <span className="font-semibold text-metric-green">
+                          {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-metric-amber">No resale value</span>
+                      )}
                       <span className="text-muted-foreground">-{item.co2_saved_kg} kg CO₂</span>
                     </div>
-                    {item.listing_text && (
+                    {item.listing_text && item.disposition === "reuse" && (
                       <p className="text-xs text-muted-foreground font-sans mt-2 line-clamp-2 italic">
                         "{item.listing_text}"
+                      </p>
+                    )}
+                    {item.recycling_suggestion && item.disposition === "recycle" && (
+                      <p className="text-xs text-muted-foreground font-sans mt-2">
+                        💡 {item.recycling_suggestion}
                       </p>
                     )}
                   </div>
