@@ -159,6 +159,15 @@ const GreenLeaseCoach = () => {
       toast({ title: "Still processing", description: "Please wait for bill extraction to complete.", variant: "destructive" });
       return;
     }
+
+    // Auto-fill postcode from extracted bill data if not already set
+    if (!postcode) {
+      const extractedFile = uploadedFiles.find(f => f.status === "done" && f.extractedData?.customer_address);
+      if (extractedFile?.extractedData?.customer_address) {
+        setPostcode(extractedFile.extractedData.customer_address);
+      }
+    }
+
     setStep("building");
   };
 
