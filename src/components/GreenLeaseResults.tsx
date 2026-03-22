@@ -21,6 +21,7 @@ const responsibleLabels = {
 interface Props {
   results: Recommendations;
   onReset: () => void;
+  agentSteps?: any[];
 }
 
 function generateEmailDraft(results: Recommendations): { subject: string; body: string } {
