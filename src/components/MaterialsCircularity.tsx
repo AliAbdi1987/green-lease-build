@@ -303,11 +303,11 @@ const MaterialsCircularity = () => {
                 location={location}
               />
               <Button
-                variant="ghost"
-                className="text-muted-foreground font-sans"
+                variant="outline"
+                className="font-sans border-primary text-primary hover:bg-primary/10"
                 onClick={resetScan}
               >
-                ← New Scan
+                Evaluate More Items
               </Button>
             </div>
           </motion.div>
