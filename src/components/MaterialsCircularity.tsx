@@ -316,8 +316,6 @@ const MaterialsCircularity = () => {
               >
                 ← New Scan
               </Button>
-                ← New Scan
-              </Button>
             </div>
           </motion.div>
         ) : null}
