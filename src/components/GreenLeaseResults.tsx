@@ -196,6 +196,38 @@ const GreenLeaseResults = ({ results, onReset, agentSteps = [] }: Props) => {
         </div>
       )}
 
+      {/* Agent pipeline steps (collapsible) */}
+      {agentSteps.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          <button
+            onClick={() => setStepsOpen(!stepsOpen)}
+            className="w-full p-5 flex items-center gap-2 hover:bg-accent/30 transition-colors text-left"
+          >
+            <Brain className="w-5 h-5 text-primary" />
+            <span className="text-sm font-sans font-medium text-foreground flex-1">
+              AI Agent Pipeline — {agentSteps.length} steps
+            </span>
+            {stepsOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {stepsOpen && (
+            <div className="border-t border-border divide-y divide-border">
+              {agentSteps.map((s: any, i: number) => (
+                <div key={i} className="p-4 text-xs font-sans">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold">{i + 1}</span>
+                    <span className="font-medium text-foreground">{s.step.replace(/_/g, " ")}</span>
+                    <span className="text-muted-foreground ml-auto">{new Date(s.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                  <pre className="text-muted-foreground bg-muted/50 rounded-lg p-2 mt-1 overflow-x-auto whitespace-pre-wrap text-[11px]">
+                    {JSON.stringify(s.result, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Button
