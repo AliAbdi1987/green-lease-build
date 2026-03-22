@@ -1,25 +1,27 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Recycle, Camera, Package, TrendingUp, Truck, ChevronRight, ImagePlus } from "lucide-react";
+import { Recycle, Camera, Package, TrendingUp, Truck, ChevronRight, ImagePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-interface MaterialItem {
+interface IdentifiedItem {
   name: string;
   condition: string;
-  resaleValue: string;
-  co2Saved: string;
-  status: "listed" | "pending" | "picked-up";
-  image: string;
+  estimated_value_sek: number;
+  co2_saved_kg: number;
+  description: string;
+  listing_text?: string;
 }
 
-const mockItems: MaterialItem[] = [
-  { name: "Solid Oak Interior Door (2x)", condition: "Good – minor scratches", resaleValue: "1,800 SEK", co2Saved: "45 kg", status: "listed", image: "🚪" },
-  { name: "IKEA PAX Wardrobe Frame", condition: "Good – needs reassembly", resaleValue: "900 SEK", co2Saved: "32 kg", status: "pending", image: "🗄️" },
-  { name: "Porcelain Sink + Faucet", condition: "Excellent", resaleValue: "650 SEK", co2Saved: "18 kg", status: "listed", image: "🚰" },
-  { name: "Kitchen Cabinet Set (8 units)", condition: "Fair – paint chips", resaleValue: "2,200 SEK", co2Saved: "85 kg", status: "picked-up", image: "🗃️" },
-];
+interface IdentifyResult {
+  items: IdentifiedItem[];
+  total_value_sek: number;
+  total_co2_saved_kg: number;
+  summary?: string;
+}
 
 const statusStyles = {
   listed: "bg-tag-green-bg text-tag-green-text",
@@ -27,15 +29,75 @@ const statusStyles = {
   "picked-up": "bg-muted text-muted-foreground",
 };
 
-const statusLabels = {
-  listed: "Listed",
-  pending: "Pickup scheduled",
-  "picked-up": "Picked up ✓",
+const itemEmojis: Record<string, string> = {
+  door: "🚪", cabinet: "🗃️", sink: "🚰", faucet: "🚰", wardrobe: "🗄️",
+  window: "🪟", radiator: "🔲", floor: "🪵", light: "💡", toilet: "🚽",
 };
 
+function getEmoji(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [key, emoji] of Object.entries(itemEmojis)) {
+    if (lower.includes(key)) return emoji;
+  }
+  return "📦";
+}
+
 const MaterialsCircularity = () => {
-  const [step, setStep] = useState<"upload" | "results">("upload");
-  const [photoCount, setPhotoCount] = useState(0);
+  const [step, setStep] = useState<"upload" | "loading" | "results">("upload");
+  const [files, setFiles] = useState<File[]>([]);
+  const [description, setDescription] = useState("");
+  const [location, setLocation] = useState("");
+  const [result, setResult] = useState<IdentifyResult | null>(null);
+
+  const handleSubmit = async () => {
+    if (files.length === 0) {
+      toast.error("Please upload at least one photo.");
+      return;
+    }
+
+    setStep("loading");
+
+    try {
+      // 1. Create a project for this scan
+      const { data: project, error: projErr } = await supabase
+        .from("projects")
+        .insert({ name: location || "Salvage Scan" })
+        .select("id")
+        .single();
+      if (projErr) throw projErr;
+
+      // 2. Upload photos to storage
+      const photoUrls: string[] = [];
+      for (const file of files) {
+        const path = `${project.id}/${Date.now()}-${file.name}`;
+        const { error: upErr } = await supabase.storage
+          .from("salvage-photos")
+          .upload(path, file);
+        if (upErr) throw upErr;
+
+        const { data: urlData } = supabase.storage
+          .from("salvage-photos")
+          .getPublicUrl(path);
+        photoUrls.push(urlData.publicUrl);
+      }
+
+      // 3. Call identify-salvage edge function
+      const { data, error } = await supabase.functions.invoke("identify-salvage", {
+        body: { photoUrls, description, location, projectId: project.id },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setResult(data.identified);
+      setStep("results");
+      toast.success(`Identified ${data.identified.items.length} items!`);
+    } catch (e: any) {
+      console.error("Identification error:", e);
+      toast.error(e.message || "Failed to identify items. Please try again.");
+      setStep("upload");
+    }
+  };
 
   return (
     <section id="circularity" className="py-28 bg-background">
@@ -71,14 +133,14 @@ const MaterialsCircularity = () => {
                 <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-accent/50 transition-all cursor-pointer p-10 bg-background">
                   <Camera className="w-7 h-7 text-muted-foreground mb-3" />
                   <span className="text-sm text-muted-foreground font-sans">
-                    {photoCount > 0 ? `${photoCount} photo(s) selected` : "Upload photos of doors, fixtures, cabinets…"}
+                    {files.length > 0 ? `${files.length} photo(s) selected` : "Upload photos of doors, fixtures, cabinets…"}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     className="hidden"
-                    onChange={(e) => setPhotoCount(e.target.files?.length || 0)}
+                    onChange={(e) => setFiles(Array.from(e.target.files || []))}
                   />
                 </label>
               </div>
@@ -90,16 +152,24 @@ const MaterialsCircularity = () => {
                 <Textarea
                   placeholder="e.g. Kitchen renovation — removing oak cabinets, porcelain sink, 2 interior doors."
                   className="bg-background min-h-[100px]"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-sans font-medium text-foreground mb-2">Location</label>
-                <Input type="text" placeholder="e.g. Södermalm, Stockholm" className="bg-background h-11" />
+                <Input
+                  type="text"
+                  placeholder="e.g. Södermalm, Stockholm"
+                  className="bg-background h-11"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
               </div>
 
               <Button
-                onClick={() => setStep("results")}
+                onClick={handleSubmit}
                 className="w-full h-12 text-base font-sans font-semibold rounded-xl bg-metric-amber text-white hover:bg-metric-amber/90"
               >
                 Identify & Estimate Value
@@ -107,7 +177,17 @@ const MaterialsCircularity = () => {
               </Button>
             </div>
           </motion.div>
-        ) : (
+        ) : step === "loading" ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20"
+          >
+            <Loader2 className="w-10 h-10 text-metric-amber animate-spin mb-4" />
+            <p className="text-lg font-sans text-muted-foreground">Analyzing photos with AI…</p>
+            <p className="text-sm font-sans text-muted-foreground mt-1">Identifying items & estimating Swedish market prices</p>
+          </motion.div>
+        ) : result ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -120,28 +200,32 @@ const MaterialsCircularity = () => {
                 <div className="w-10 h-10 rounded-xl bg-tag-green-bg flex items-center justify-center mx-auto mb-3">
                   <TrendingUp className="w-5 h-5 text-metric-green" />
                 </div>
-                <p className="text-2xl font-display text-foreground">5,550 SEK</p>
+                <p className="text-2xl font-display text-foreground">
+                  {result.total_value_sek.toLocaleString("sv-SE")} SEK
+                </p>
                 <p className="text-sm text-muted-foreground font-sans">Total resale value</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-3">
                   <Recycle className="w-5 h-5 text-metric-blue" />
                 </div>
-                <p className="text-2xl font-display text-foreground">180 kg</p>
+                <p className="text-2xl font-display text-foreground">
+                  {result.total_co2_saved_kg} kg
+                </p>
                 <p className="text-sm text-muted-foreground font-sans">CO₂ saved from landfill</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-tag-amber-bg flex items-center justify-center mx-auto mb-3">
                   <Truck className="w-5 h-5 text-metric-amber" />
                 </div>
-                <p className="text-2xl font-display text-foreground">4</p>
+                <p className="text-2xl font-display text-foreground">{result.items.length}</p>
                 <p className="text-sm text-muted-foreground font-sans">Items identified</p>
               </div>
             </div>
 
             {/* Items grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {mockItems.map((item, i) => (
+              {result.items.map((item, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 10 }}
@@ -150,20 +234,27 @@ const MaterialsCircularity = () => {
                   className="bg-card rounded-2xl border border-border p-5 flex gap-4 hover:shadow-lg transition-shadow"
                 >
                   <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center text-2xl shrink-0">
-                    {item.image}
+                    {getEmoji(item.name)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h4 className="font-sans font-semibold text-foreground text-sm">{item.name}</h4>
-                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyles[item.status]}`}>
-                        {statusLabels[item.status]}
+                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyles.listed}`}>
+                        Listed
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground font-sans mb-2">{item.condition}</p>
                     <div className="flex gap-4 text-sm font-sans">
-                      <span className="font-semibold text-metric-green">{item.resaleValue}</span>
-                      <span className="text-muted-foreground">-{item.co2Saved} CO₂</span>
+                      <span className="font-semibold text-metric-green">
+                        {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
+                      </span>
+                      <span className="text-muted-foreground">-{item.co2_saved_kg} kg CO₂</span>
                     </div>
+                    {item.listing_text && (
+                      <p className="text-xs text-muted-foreground font-sans mt-2 line-clamp-2 italic">
+                        "{item.listing_text}"
+                      </p>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -179,12 +270,22 @@ const MaterialsCircularity = () => {
                 <Truck className="w-4 h-4 mr-2" />
                 Schedule Pickups
               </Button>
-              <Button variant="ghost" className="text-muted-foreground font-sans" onClick={() => setStep("upload")}>
+              <Button
+                variant="ghost"
+                className="text-muted-foreground font-sans"
+                onClick={() => {
+                  setStep("upload");
+                  setFiles([]);
+                  setResult(null);
+                  setDescription("");
+                  setLocation("");
+                }}
+              >
                 ← New Scan
               </Button>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </div>
     </section>
   );
