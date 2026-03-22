@@ -312,14 +312,10 @@ const MaterialsCircularity = () => {
               <Button
                 variant="ghost"
                 className="text-muted-foreground font-sans"
-                onClick={() => {
-                  setStep("upload");
-                  setFiles([]);
-                  setResult(null);
-                  setDescription("");
-                  setLocation("");
-                }}
+                onClick={resetScan}
               >
+                ← New Scan
+              </Button>
                 ← New Scan
               </Button>
             </div>
