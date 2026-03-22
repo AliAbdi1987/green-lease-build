@@ -74,9 +74,10 @@ Best regards,
   return { subject, body };
 }
 
-const GreenLeaseResults = ({ results, onReset }: Props) => {
+const GreenLeaseResults = ({ results, onReset, agentSteps = [] }: Props) => {
   const [emailOpen, setEmailOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [stepsOpen, setStepsOpen] = useState(false);
   const { subject, body } = generateEmailDraft(results);
 
   const handleCopy = async () => {
