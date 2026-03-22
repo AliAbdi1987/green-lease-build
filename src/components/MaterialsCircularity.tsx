@@ -206,7 +206,7 @@ const MaterialsCircularity = () => {
                   <TrendingUp className="w-5 h-5 text-metric-green" />
                 </div>
                 <p className="text-2xl font-display text-foreground">
-                  {result.total_reuse_value_sek.toLocaleString("sv-SE")} SEK
+                  {(result.total_reuse_value_sek ?? 0).toLocaleString("sv-SE")} SEK
                 </p>
                 <p className="text-sm text-muted-foreground font-sans">Resale value (reuse)</p>
               </div>
@@ -215,7 +215,7 @@ const MaterialsCircularity = () => {
                   <Recycle className="w-5 h-5 text-metric-blue" />
                 </div>
                 <p className="text-2xl font-display text-foreground">
-                  {result.total_co2_saved_kg} kg
+                  {result.total_co2_saved_kg ?? 0} kg
                 </p>
                 <p className="text-sm text-muted-foreground font-sans">CO₂ saved</p>
               </div>
@@ -223,14 +223,14 @@ const MaterialsCircularity = () => {
                 <div className="w-10 h-10 rounded-xl bg-tag-green-bg flex items-center justify-center mx-auto mb-3">
                   <Package className="w-5 h-5 text-metric-green" />
                 </div>
-                <p className="text-2xl font-display text-foreground">{result.reuse_count}</p>
+                <p className="text-2xl font-display text-foreground">{result.reuse_count ?? 0}</p>
                 <p className="text-sm text-muted-foreground font-sans">Reusable items</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-tag-amber-bg flex items-center justify-center mx-auto mb-3">
                   <Recycle className="w-5 h-5 text-metric-amber" />
                 </div>
-                <p className="text-2xl font-display text-foreground">{result.recycle_count}</p>
+                <p className="text-2xl font-display text-foreground">{result.recycle_count ?? 0}</p>
                 <p className="text-sm text-muted-foreground font-sans">Recycle only</p>
               </div>
             </div>
@@ -260,7 +260,7 @@ const MaterialsCircularity = () => {
                     <div className="flex gap-4 text-sm font-sans">
                       {item.disposition === "reuse" ? (
                         <span className="font-semibold text-metric-green">
-                          {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
+                          {(item.estimated_value_sek ?? 0).toLocaleString("sv-SE")} SEK
                         </span>
                       ) : (
                         <span className="font-semibold text-metric-amber">No resale value</span>
