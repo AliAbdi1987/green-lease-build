@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      analysis_sessions: {
+        Row: {
+          agent_steps: Json | null
+          bill_summary: Json | null
+          building_profile: Json | null
+          created_at: string
+          id: string
+          project_id: string
+          recommendations: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          agent_steps?: Json | null
+          bill_summary?: Json | null
+          building_profile?: Json | null
+          created_at?: string
+          id?: string
+          project_id: string
+          recommendations?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          agent_steps?: Json | null
+          bill_summary?: Json | null
+          building_profile?: Json | null
+          created_at?: string
+          id?: string
+          project_id?: string
+          recommendations?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bills: {
         Row: {
           created_at: string
@@ -158,6 +199,39 @@ export type Database = {
           },
         ]
       }
+      regulation_embeddings: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          source: string | null
+          title: string
+        }
+        Insert: {
+          category?: string
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          source?: string | null
+          title: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          source?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       salvage_items: {
         Row: {
           co2_saved_kg: number | null
@@ -216,7 +290,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_regulations: {
+        Args: {
+          filter_category?: string
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          content: string
+          id: string
+          similarity: number
+          source: string
+          title: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

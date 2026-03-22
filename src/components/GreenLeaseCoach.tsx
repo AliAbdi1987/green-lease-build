@@ -51,6 +51,16 @@ interface UploadedFileState {
   error?: string;
 }
 
+const PROJECT_STORAGE_KEY = "green-lease-project-id";
+
+const getOrCreateProjectId = (): string => {
+  const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
+  if (stored) return stored;
+  const id = crypto.randomUUID();
+  localStorage.setItem(PROJECT_STORAGE_KEY, id);
+  return id;
+};
+
 const GreenLeaseCoach = () => {
   const [step, setStep] = useState<"bills" | "building" | "results">("bills");
   const [avgBillSek, setAvgBillSek] = useState("");
@@ -61,7 +71,10 @@ const GreenLeaseCoach = () => {
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [results, setResults] = useState<Recommendations | null>(null);
+  const [agentSteps, setAgentSteps] = useState<any[]>([]);
+  const [regulationsSeeded, setRegulationsSeeded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectId = useRef(getOrCreateProjectId());
   const { toast } = useToast();
 
   const handleReset = () => {
@@ -171,6 +184,16 @@ const GreenLeaseCoach = () => {
     setStep("building");
   };
 
+  const seedRegulations = async () => {
+    if (regulationsSeeded) return;
+    try {
+      await supabase.functions.invoke("embed-regulations");
+      setRegulationsSeeded(true);
+    } catch {
+      // Non-critical: RAG will work without seeding if already done
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!sizeSqm || !heatingType) {
       toast({ title: "Missing info", description: "Please fill in building size and heating type.", variant: "destructive" });
@@ -179,6 +202,9 @@ const GreenLeaseCoach = () => {
 
     setLoading(true);
     try {
+      // Seed regulations in background (idempotent)
+      seedRegulations();
+
       // Collect all extracted bill data
       const extractedBills = uploadedFiles
         .filter(f => f.status === "done" && f.extractedData)
@@ -191,13 +217,17 @@ const GreenLeaseCoach = () => {
           postcode,
           avgBillSek: avgBillSek ? Number(avgBillSek) : undefined,
           extractedBills: extractedBills.length > 0 ? extractedBills : undefined,
+          projectId: projectId.current,
         },
       });
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      setResults(data);
+      // Separate agent steps from results
+      const { agent_steps, ...recommendationData } = data;
+      setAgentSteps(agent_steps || []);
+      setResults(recommendationData);
       setStep("results");
     } catch (e: any) {
       toast({ title: "Analysis failed", description: e.message || "Please try again.", variant: "destructive" });
@@ -499,7 +529,7 @@ const GreenLeaseCoach = () => {
               exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.3 }}
             >
-              <GreenLeaseResults results={results} onReset={handleReset} />
+              <GreenLeaseResults results={results} onReset={handleReset} agentSteps={agentSteps} />
             </motion.div>
           )}
         </AnimatePresence>
