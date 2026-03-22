@@ -52,11 +52,15 @@ serve(async (req) => {
 STEP 1 — TRIAGE (do this first for every item):
 Carefully examine each item's visual condition. Classify it as one of:
 - "reuse": Item is structurally sound and can be resold/reused as-is or with minor refurbishment.
-  Examples: doors with intact frames, working faucets, cabinets with solid joints, radiators without rust-through.
-- "recycle": Item is damaged beyond practical reuse — cracked porcelain, warped/rotted wood, corroded metal,
-  broken glass, missing critical parts. It should be sent for material recycling (wood → chipboard, metal → smelter, etc.).
+  Examples: doors with intact frames, working faucets, cabinets with solid joints, radiators without rust-through,
+  kitchen sets in storage/warehouses, items displayed for resale, intact countertops, functional sinks.
+- "recycle": Item is clearly damaged beyond practical reuse — shattered porcelain, severely warped/rotted wood,
+  rusted-through metal, broken glass, missing critical structural parts.
 
-Be honest and conservative. If an item looks marginal, classify as "recycle" and explain why.
+IMPORTANT: Err on the side of REUSE. Most building materials that have been carefully removed and stored
+(e.g. in a warehouse, storage area, or salvage yard) are there precisely because they are reusable.
+Only classify as "recycle" when there is clear visible damage that makes the item non-functional.
+Cosmetic wear (scratches, minor dents, faded finish) does NOT disqualify an item from reuse.
 
 STEP 2 — VALUATION (only for "reuse" items):
 For each reusable item, provide:
@@ -80,6 +84,7 @@ Base reuse price estimates on typical Swedish secondhand market values:
 - Hardwood flooring: 100-300 SEK per sqm
 - Light fixtures: 100-800 SEK
 - Wardrobes/storage: 500-2000 SEK
+- Countertops: 500-2000 SEK depending on material and size
 
 Adjust based on visible condition, brand quality, and age.`,
           },
