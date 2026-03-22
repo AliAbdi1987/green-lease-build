@@ -11,3 +11,6 @@ import_map = "./deno.json"
 [functions.extract-bill]
 verify_jwt = false
 import_map = "./deno.json"
+
+[functions.identify-salvage]
+verify_jwt = false
