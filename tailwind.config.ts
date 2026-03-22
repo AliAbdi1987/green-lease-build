@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
-        body: ['"DM Sans"', 'system-ui', 'sans-serif'],
+        display: ['"Instrument Serif"', 'Georgia', 'serif'],
+        sans: ['"Inter"', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -61,28 +61,26 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        emerald: {
-          DEFAULT: "hsl(var(--emerald))",
-          light: "hsl(var(--emerald-light))",
-        },
-        sand: {
-          DEFAULT: "hsl(var(--sand))",
-          dark: "hsl(var(--sand-dark))",
-        },
-        earth: "hsl(var(--earth))",
-        leaf: {
-          DEFAULT: "hsl(var(--leaf))",
-          light: "hsl(var(--leaf-light))",
-        },
-        warm: {
-          DEFAULT: "hsl(var(--warm))",
-          light: "hsl(var(--warm-light))",
+        hero: {
+          bg: "hsl(var(--hero-bg))",
+          foreground: "hsl(var(--hero-foreground))",
+          muted: "hsl(var(--hero-muted))",
+          accent: "hsl(var(--hero-accent))",
         },
         metric: {
           green: "hsl(var(--metric-green))",
           blue: "hsl(var(--metric-blue))",
           amber: "hsl(var(--metric-amber))",
         },
+        tag: {
+          "green-bg": "hsl(var(--tag-green-bg))",
+          "green-text": "hsl(var(--tag-green-text))",
+          "amber-bg": "hsl(var(--tag-amber-bg))",
+          "amber-text": "hsl(var(--tag-amber-text))",
+          "red-bg": "hsl(var(--tag-red-bg))",
+          "red-text": "hsl(var(--tag-red-text))",
+        },
+        "section-alt": "hsl(var(--section-alt))",
       },
       borderRadius: {
         lg: "var(--radius)",

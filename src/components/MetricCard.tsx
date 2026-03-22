@@ -10,16 +10,16 @@ interface MetricCardProps {
   delay?: number;
 }
 
-const colorMap = {
-  green: "bg-leaf-light text-metric-green",
-  blue: "bg-blue-50 text-metric-blue",
-  amber: "bg-warm-light text-metric-amber",
-};
-
 const iconColorMap = {
   green: "text-metric-green",
   blue: "text-metric-blue",
   amber: "text-metric-amber",
+};
+
+const bgMap = {
+  green: "bg-tag-green-bg",
+  blue: "bg-secondary",
+  amber: "bg-tag-amber-bg",
 };
 
 const MetricCard = ({ icon: Icon, label, value, sublabel, color, delay = 0 }: MetricCardProps) => {
@@ -29,14 +29,14 @@ const MetricCard = ({ icon: Icon, label, value, sublabel, color, delay = 0 }: Me
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay }}
       viewport={{ once: true }}
-      className="rounded-xl bg-card border border-border p-6 flex flex-col items-center text-center"
+      className="rounded-2xl bg-card border border-border p-6 flex flex-col items-center text-center hover:shadow-lg transition-shadow"
     >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${colorMap[color]}`}>
-        <Icon className={`w-6 h-6 ${iconColorMap[color]}`} />
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${bgMap[color]}`}>
+        <Icon className={`w-5 h-5 ${iconColorMap[color]}`} />
       </div>
-      <p className="text-sm text-muted-foreground font-medium mb-1">{label}</p>
-      <p className="text-3xl font-display font-bold text-foreground">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground font-sans font-medium mb-2">{label}</p>
+      <p className="text-3xl font-display text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground mt-1 font-sans">{sublabel}</p>
     </motion.div>
   );
 };
