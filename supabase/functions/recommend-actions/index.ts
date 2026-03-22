@@ -12,12 +12,20 @@ serve(async (req) => {
   }
 
   try {
-    const { sizeSqm, heatingType, postcode } = await req.json();
+    const { sizeSqm, heatingType, postcode, avgBillSek, billFileUrls } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are a Green Lease Coach AI for Swedish buildings. Given building data, produce energy-saving recommendations.
+    const billContext = avgBillSek
+      ? `Current average monthly energy bill: ${avgBillSek} SEK.`
+      : "No bill amount provided.";
+
+    const fileContext = billFileUrls?.length
+      ? `The tenant also uploaded ${billFileUrls.length} bill file(s) for reference.`
+      : "";
+
+    const systemPrompt = `You are a Green Lease Coach AI for Swedish buildings. Given building data and energy bill costs, produce energy-saving recommendations.
 
 RULES:
 - All monetary values in SEK
@@ -25,11 +33,15 @@ RULES:
 - Sort by cost (cheapest first)
 - Include both tenant actions and landlord requests
 - Be specific and actionable
-- Consider Swedish climate and building standards`;
+- Consider Swedish climate and building standards
+- IMPORTANT: Use the provided monthly bill amount to ground your savings estimates. Savings should be realistic percentages of the actual bill.
+- If the average bill is provided, total_savings_sek_month should not exceed 40% of it unless extraordinary measures are recommended.`;
 
     const userPrompt = `Building: ${sizeSqm} m², heating: ${heatingType}, location: ${postcode || "Sweden"}.
+${billContext}
+${fileContext}
 
-Return a JSON object using this exact tool schema.`;
+Based on this energy cost data, return realistic energy-saving recommendations with savings grounded in the actual bill amount. Return a JSON object using this exact tool schema.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -50,7 +62,7 @@ Return a JSON object using this exact tool schema.`;
               function: {
                 name: "recommend_actions",
                 description:
-                  "Return energy-saving recommendations for a building",
+                  "Return energy-saving recommendations for a building based on actual bill data",
                 parameters: {
                   type: "object",
                   properties: {
