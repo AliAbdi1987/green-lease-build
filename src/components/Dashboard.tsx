@@ -4,8 +4,12 @@ import MetricCard from "./MetricCard";
 
 const Dashboard = () => {
   return (
-    <section id="dashboard" className="py-28 bg-background">
-      <div className="container px-6 max-w-5xl">
+    <section id="dashboard" className="py-28 bg-background relative overflow-hidden">
+      {/* Subtle background decoration */}
+      <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-hero-accent/3 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[300px] h-[300px] rounded-full bg-metric-amber/3 blur-[100px] pointer-events-none" />
+
+      <div className="container px-6 max-w-5xl relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -34,24 +38,36 @@ const Dashboard = () => {
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
           viewport={{ once: true }}
-          className="bg-card rounded-2xl border border-border p-8 text-center"
+          className="bg-card rounded-2xl border border-border p-8 text-center relative overflow-hidden"
         >
-          <p className="text-sm text-muted-foreground font-sans mb-4">Combined annual impact equivalent to</p>
+          {/* Shimmer accent line */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-hero-accent/20 to-transparent shimmer-line overflow-hidden" />
+
+          <p className="text-sm text-muted-foreground font-sans mb-6">Combined annual impact equivalent to</p>
           <div className="flex flex-wrap items-center justify-center gap-10">
-            <div>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="transition-transform"
+            >
               <p className="text-3xl font-display text-foreground">🌳 28</p>
               <p className="text-sm text-muted-foreground font-sans">trees planted</p>
-            </div>
+            </motion.div>
             <div className="w-px h-12 bg-border hidden sm:block" />
-            <div>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="transition-transform"
+            >
               <p className="text-3xl font-display text-foreground">🚗 2,200 km</p>
               <p className="text-sm text-muted-foreground font-sans">driving offset</p>
-            </div>
+            </motion.div>
             <div className="w-px h-12 bg-border hidden sm:block" />
-            <div>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="transition-transform"
+            >
               <p className="text-3xl font-display text-primary">32,910 SEK</p>
               <p className="text-sm text-muted-foreground font-sans">total value / year</p>
-            </div>
+            </motion.div>
           </div>
         </motion.div>
       </div>
