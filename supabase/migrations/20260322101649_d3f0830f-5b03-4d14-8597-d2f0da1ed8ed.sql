@@ -1,0 +1,2 @@
+CREATE POLICY "Anyone can upload bills" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'bills');
+CREATE POLICY "Anyone can read bills" ON storage.objects FOR SELECT TO public USING (bucket_id = 'bills');
