@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import SchedulePickup from "@/components/SchedulePickup";
 
 interface IdentifiedItem {
   name: string;
@@ -301,10 +302,10 @@ const MaterialsCircularity = () => {
                 <ImagePlus className="w-4 h-4 mr-2" />
                 Generate Marketplace Listings
               </Button>
-              <Button variant="outline" className="flex-1 h-12 font-sans rounded-xl">
-                <Truck className="w-4 h-4 mr-2" />
-                Schedule Pickups
-              </Button>
+              <SchedulePickup
+                itemCount={result?.reuse_count ?? 0}
+                location={location}
+              />
               <Button
                 variant="ghost"
                 className="text-muted-foreground font-sans"
