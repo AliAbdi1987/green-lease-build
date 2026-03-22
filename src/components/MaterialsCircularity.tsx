@@ -298,10 +298,6 @@ const MaterialsCircularity = () => {
 
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="outline" className="flex-1 h-12 font-sans rounded-xl">
-                <ImagePlus className="w-4 h-4 mr-2" />
-                Generate Marketplace Listings
-              </Button>
               <SchedulePickup
                 itemCount={result?.reuse_count ?? 0}
                 location={location}
