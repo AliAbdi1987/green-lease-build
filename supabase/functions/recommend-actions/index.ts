@@ -12,18 +12,33 @@ serve(async (req) => {
   }
 
   try {
-    const { sizeSqm, heatingType, postcode, avgBillSek, billFileUrls } = await req.json();
+    const { sizeSqm, heatingType, postcode, avgBillSek, extractedBills } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const billContext = avgBillSek
-      ? `Current average monthly energy bill: ${avgBillSek} SEK.`
-      : "No bill amount provided.";
+    // Build bill context from extracted data
+    let billContext = "";
+    if (extractedBills?.length) {
+      const totalCost = extractedBills.reduce((sum: number, b: any) => sum + (b.total_cost_sek || 0), 0);
+      const totalKwh = extractedBills.reduce((sum: number, b: any) => sum + (b.energy_kwh || 0), 0);
+      const avgCost = totalCost / extractedBills.length;
 
-    const fileContext = billFileUrls?.length
-      ? `The tenant also uploaded ${billFileUrls.length} bill file(s) for reference.`
-      : "";
+      billContext = `EXTRACTED BILL DATA (from ${extractedBills.length} uploaded bills):
+- Total cost across all bills: ${totalCost} SEK
+- Total energy consumption: ${totalKwh} kWh
+- Average cost per bill: ${avgCost.toFixed(0)} SEK
+- Energy types: ${[...new Set(extractedBills.map((b: any) => b.energy_type))].join(", ")}
+
+Individual bills:
+${extractedBills.map((b: any, i: number) => `  Bill ${i + 1}: ${b.provider_name} — ${b.total_cost_sek} SEK, ${b.energy_kwh} kWh (${b.energy_type})${b.billing_period_start ? ` [${b.billing_period_start} to ${b.billing_period_end}]` : ""}`).join("\n")}
+
+Use this extracted data to ground your savings estimates. The average monthly bill is approximately ${avgCost.toFixed(0)} SEK.`;
+    } else if (avgBillSek) {
+      billContext = `User-reported average monthly energy bill: ${avgBillSek} SEK.`;
+    } else {
+      billContext = "No bill data provided.";
+    }
 
     const systemPrompt = `You are a Green Lease Coach AI for Swedish buildings. Given building data and energy bill costs, produce energy-saving recommendations.
 
@@ -34,14 +49,14 @@ RULES:
 - Include both tenant actions and landlord requests
 - Be specific and actionable
 - Consider Swedish climate and building standards
-- IMPORTANT: Use the provided monthly bill amount to ground your savings estimates. Savings should be realistic percentages of the actual bill.
-- If the average bill is provided, total_savings_sek_month should not exceed 40% of it unless extraordinary measures are recommended.`;
+- IMPORTANT: Use the provided bill data to ground your savings estimates. Savings should be realistic percentages of the actual bill.
+- Total_savings_sek_month should not exceed 40% of the average monthly bill unless extraordinary measures are recommended.`;
 
     const userPrompt = `Building: ${sizeSqm} m², heating: ${heatingType}, location: ${postcode || "Sweden"}.
-${billContext}
-${fileContext}
 
-Based on this energy cost data, return realistic energy-saving recommendations with savings grounded in the actual bill amount. Return a JSON object using this exact tool schema.`;
+${billContext}
+
+Based on this energy cost data, return realistic energy-saving recommendations with savings grounded in the actual bill data. Return a JSON object using this exact tool schema.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
