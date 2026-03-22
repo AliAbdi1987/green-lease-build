@@ -529,7 +529,7 @@ const GreenLeaseCoach = () => {
               exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.3 }}
             >
-              <GreenLeaseResults results={results} onReset={handleReset} />
+              <GreenLeaseResults results={results} onReset={handleReset} agentSteps={agentSteps} />
             </motion.div>
           )}
         </AnimatePresence>
