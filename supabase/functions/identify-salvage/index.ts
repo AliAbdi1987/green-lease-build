@@ -173,9 +173,9 @@ Adjust based on visible condition, brand quality, and age.`,
       condition: item.condition_rating,
       estimated_value_sek: item.estimated_value_sek,
       co2_saved_kg: item.co2_saved_kg,
-      description: `${item.condition_notes || ""}. ${item.description || ""}`.trim(),
-      listing_text: item.listing_text || null,
-      status: "listed",
+      description: `[${item.disposition.toUpperCase()}] ${item.disposition_reason}. ${item.condition_notes || ""}. ${item.description || ""}`.trim(),
+      listing_text: item.listing_text || item.recycling_suggestion || null,
+      status: item.disposition === "reuse" ? "listed" : "recycle",
     }));
 
     const { error: insertError } = await supabase
