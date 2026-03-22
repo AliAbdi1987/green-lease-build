@@ -9,25 +9,29 @@ import { toast } from "sonner";
 
 interface IdentifiedItem {
   name: string;
+  disposition: "reuse" | "recycle";
+  disposition_reason: string;
   condition_rating: string;
   condition_notes: string;
   estimated_value_sek: number;
   co2_saved_kg: number;
   description: string;
   listing_text?: string;
+  recycling_suggestion?: string;
 }
 
 interface IdentifyResult {
   items: IdentifiedItem[];
-  total_value_sek: number;
+  total_reuse_value_sek: number;
   total_co2_saved_kg: number;
+  reuse_count: number;
+  recycle_count: number;
   summary?: string;
 }
 
-const statusStyles = {
-  listed: "bg-tag-green-bg text-tag-green-text",
-  pending: "bg-tag-amber-bg text-tag-amber-text",
-  "picked-up": "bg-muted text-muted-foreground",
+const dispositionStyles = {
+  reuse: "bg-tag-green-bg text-tag-green-text",
+  recycle: "bg-tag-amber-bg text-tag-amber-text",
 };
 
 const itemEmojis: Record<string, string> = {
@@ -196,15 +200,15 @@ const MaterialsCircularity = () => {
             className="space-y-6"
           >
             {/* Summary metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-tag-green-bg flex items-center justify-center mx-auto mb-3">
                   <TrendingUp className="w-5 h-5 text-metric-green" />
                 </div>
                 <p className="text-2xl font-display text-foreground">
-                  {result.total_value_sek.toLocaleString("sv-SE")} SEK
+                  {result.total_reuse_value_sek.toLocaleString("sv-SE")} SEK
                 </p>
-                <p className="text-sm text-muted-foreground font-sans">Total resale value</p>
+                <p className="text-sm text-muted-foreground font-sans">Resale value (reuse)</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-3">
@@ -213,14 +217,21 @@ const MaterialsCircularity = () => {
                 <p className="text-2xl font-display text-foreground">
                   {result.total_co2_saved_kg} kg
                 </p>
-                <p className="text-sm text-muted-foreground font-sans">CO₂ saved from landfill</p>
+                <p className="text-sm text-muted-foreground font-sans">CO₂ saved</p>
+              </div>
+              <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-tag-green-bg flex items-center justify-center mx-auto mb-3">
+                  <Package className="w-5 h-5 text-metric-green" />
+                </div>
+                <p className="text-2xl font-display text-foreground">{result.reuse_count}</p>
+                <p className="text-sm text-muted-foreground font-sans">Reusable items</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-tag-amber-bg flex items-center justify-center mx-auto mb-3">
-                  <Truck className="w-5 h-5 text-metric-amber" />
+                  <Recycle className="w-5 h-5 text-metric-amber" />
                 </div>
-                <p className="text-2xl font-display text-foreground">{result.items.length}</p>
-                <p className="text-sm text-muted-foreground font-sans">Items identified</p>
+                <p className="text-2xl font-display text-foreground">{result.recycle_count}</p>
+                <p className="text-sm text-muted-foreground font-sans">Recycle only</p>
               </div>
             </div>
 
@@ -240,20 +251,30 @@ const MaterialsCircularity = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h4 className="font-sans font-semibold text-foreground text-sm">{item.name}</h4>
-                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyles.listed}`}>
-                        Listed
+                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full shrink-0 ${dispositionStyles[item.disposition]}`}>
+                        {item.disposition === "reuse" ? "♻️ Reuse" : "🗑️ Recycle"}
                       </span>
                     </div>
+                    <p className="text-xs text-primary font-sans font-medium mb-1">{item.disposition_reason}</p>
                     <p className="text-sm text-muted-foreground font-sans mb-2">{item.condition_notes}</p>
                     <div className="flex gap-4 text-sm font-sans">
-                      <span className="font-semibold text-metric-green">
-                        {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
-                      </span>
+                      {item.disposition === "reuse" ? (
+                        <span className="font-semibold text-metric-green">
+                          {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-metric-amber">No resale value</span>
+                      )}
                       <span className="text-muted-foreground">-{item.co2_saved_kg} kg CO₂</span>
                     </div>
-                    {item.listing_text && (
+                    {item.listing_text && item.disposition === "reuse" && (
                       <p className="text-xs text-muted-foreground font-sans mt-2 line-clamp-2 italic">
                         "{item.listing_text}"
+                      </p>
+                    )}
+                    {item.recycling_suggestion && item.disposition === "recycle" && (
+                      <p className="text-xs text-muted-foreground font-sans mt-2">
+                        💡 {item.recycling_suggestion}
                       </p>
                     )}
                   </div>

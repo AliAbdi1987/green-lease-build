@@ -47,18 +47,30 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are a Swedish building materials expert and circular economy specialist.
-Analyze photos of renovation/demolition materials and identify each salvageable item.
+            content: `You are a Swedish building materials expert, circular economy specialist, and certified waste assessor.
 
-For each item, provide:
+STEP 1 — TRIAGE (do this first for every item):
+Carefully examine each item's visual condition. Classify it as one of:
+- "reuse": Item is structurally sound and can be resold/reused as-is or with minor refurbishment.
+  Examples: doors with intact frames, working faucets, cabinets with solid joints, radiators without rust-through.
+- "recycle": Item is damaged beyond practical reuse — cracked porcelain, warped/rotted wood, corroded metal,
+  broken glass, missing critical parts. It should be sent for material recycling (wood → chipboard, metal → smelter, etc.).
+
+Be honest and conservative. If an item looks marginal, classify as "recycle" and explain why.
+
+STEP 2 — VALUATION (only for "reuse" items):
+For each reusable item, provide:
 - name: Clear item name in English
-- condition: Assessment (Excellent / Good / Fair / Poor) with brief note
-- estimated_value_sek: Resale value estimate in SEK based on Swedish market prices (Blocket.se, Tradera, CCBuild typical prices)
-- co2_saved_kg: Estimated CO2 saved by reusing instead of manufacturing new (kg)
+- condition: Assessment (Excellent / Good / Fair) with brief note
+- estimated_value_sek: Resale value estimate in SEK based on Swedish market prices (Blocket.se, Tradera, CCBuild)
+- co2_saved_kg: Estimated CO₂ saved by reusing instead of manufacturing new (kg)
 - description: Brief description for a marketplace listing
 - listing_text: Ready-to-post Swedish marketplace listing text (in Swedish)
 
-Base your price estimates on typical Swedish secondhand market values:
+For "recycle" items, set estimated_value_sek to 0 and provide:
+- name, condition notes explaining why it's not reusable, co2_saved_kg from recycling (lower than reuse), and recycling_suggestion.
+
+Base reuse price estimates on typical Swedish secondhand market values:
 - Interior doors: 400-1200 SEK each depending on material and condition
 - Kitchen cabinets: 200-500 SEK per unit, full sets 1500-4000 SEK
 - Porcelain sinks: 300-800 SEK
@@ -76,7 +88,7 @@ Adjust based on visible condition, brand quality, and age.`,
             content: [
               {
                 type: "text",
-                text: `Identify all salvageable items in these photos.${description ? ` Context: ${description}` : ""}${location ? ` Location: ${location}` : ""}`,
+                text: `Examine these photos carefully. For each item: (1) decide if it is reusable or should be recycled, (2) then estimate value for reusable items.${description ? ` Context: ${description}` : ""}${location ? ` Location: ${location}` : ""}`,
               },
               ...imageContents,
             ],
@@ -87,7 +99,7 @@ Adjust based on visible condition, brand quality, and age.`,
             type: "function",
             function: {
               name: "identify_salvage_items",
-              description: "Return identified salvageable building materials with pricing",
+              description: "Return triaged salvageable building materials with reuse/recycle classification and pricing",
               parameters: {
                 type: "object",
                 properties: {
@@ -97,21 +109,26 @@ Adjust based on visible condition, brand quality, and age.`,
                       type: "object",
                       properties: {
                         name: { type: "string" },
+                        disposition: { type: "string", enum: ["reuse", "recycle"], description: "Whether the item can be reused/resold or should be recycled" },
+                        disposition_reason: { type: "string", description: "Brief explanation of why the item is classified as reuse or recycle" },
                         condition_rating: { type: "string", enum: ["excellent", "good", "fair", "poor"], description: "Overall condition rating" },
-                        condition_notes: { type: "string", description: "Detailed condition description" },
-                        estimated_value_sek: { type: "number" },
-                        co2_saved_kg: { type: "number" },
+                        condition_notes: { type: "string", description: "Detailed condition description based on visual inspection" },
+                        estimated_value_sek: { type: "number", description: "Resale value for reuse items, 0 for recycle items" },
+                        co2_saved_kg: { type: "number", description: "CO2 saved — higher for reuse, lower for material recycling" },
                         description: { type: "string" },
-                        listing_text: { type: "string" },
+                        listing_text: { type: "string", description: "Swedish marketplace listing text, only for reuse items" },
+                        recycling_suggestion: { type: "string", description: "How/where to recycle, only for recycle items" },
                       },
-                      required: ["name", "condition_rating", "condition_notes", "estimated_value_sek", "co2_saved_kg", "description"],
+                      required: ["name", "disposition", "disposition_reason", "condition_rating", "condition_notes", "estimated_value_sek", "co2_saved_kg", "description"],
                     },
                   },
-                  total_value_sek: { type: "number" },
-                  total_co2_saved_kg: { type: "number" },
-                  summary: { type: "string" },
+                  total_reuse_value_sek: { type: "number", description: "Sum of resale values for reuse items only" },
+                  total_co2_saved_kg: { type: "number", description: "Total CO2 saved across all items (reuse + recycling)" },
+                  reuse_count: { type: "number" },
+                  recycle_count: { type: "number" },
+                  summary: { type: "string", description: "Overall assessment of the materials" },
                 },
-                required: ["items", "total_value_sek", "total_co2_saved_kg"],
+                required: ["items", "total_reuse_value_sek", "total_co2_saved_kg", "reuse_count", "recycle_count"],
               },
             },
           },
@@ -156,9 +173,9 @@ Adjust based on visible condition, brand quality, and age.`,
       condition: item.condition_rating,
       estimated_value_sek: item.estimated_value_sek,
       co2_saved_kg: item.co2_saved_kg,
-      description: `${item.condition_notes || ""}. ${item.description || ""}`.trim(),
-      listing_text: item.listing_text || null,
-      status: "listed",
+      description: `[${item.disposition.toUpperCase()}] ${item.disposition_reason}. ${item.condition_notes || ""}. ${item.description || ""}`.trim(),
+      listing_text: item.listing_text || item.recycling_suggestion || null,
+      status: item.disposition === "reuse" ? "listed" : "recycle",
     }));
 
     const { error: insertError } = await supabase
