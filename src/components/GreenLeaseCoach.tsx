@@ -197,16 +197,6 @@ const GreenLeaseCoach = () => {
     }
   };
 
-  const handleReset = () => {
-    setStep("bills");
-    setAvgBillSek("");
-    setUploadedFiles([]);
-    setSizeSqm("");
-    setHeatingType("");
-    setPostcode("");
-    setResults(null);
-  };
-
   const steps = ["Energy Bills", "Building Info", "Results"];
   const currentIndex = step === "bills" ? 0 : step === "building" ? 1 : 2;
 
