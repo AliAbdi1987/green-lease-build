@@ -64,6 +64,16 @@ const GreenLeaseCoach = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const handleReset = () => {
+    setStep("bills");
+    setAvgBillSek("");
+    setUploadedFiles([]);
+    setSizeSqm("");
+    setHeatingType("");
+    setPostcode("");
+    setResults(null);
+  };
+
   // Reset the coach when navigating back via hash link
   useEffect(() => {
     const onHashChange = () => {
