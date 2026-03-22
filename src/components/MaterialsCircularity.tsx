@@ -200,15 +200,15 @@ const MaterialsCircularity = () => {
             className="space-y-6"
           >
             {/* Summary metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-tag-green-bg flex items-center justify-center mx-auto mb-3">
                   <TrendingUp className="w-5 h-5 text-metric-green" />
                 </div>
                 <p className="text-2xl font-display text-foreground">
-                  {result.total_value_sek.toLocaleString("sv-SE")} SEK
+                  {result.total_reuse_value_sek.toLocaleString("sv-SE")} SEK
                 </p>
-                <p className="text-sm text-muted-foreground font-sans">Total resale value</p>
+                <p className="text-sm text-muted-foreground font-sans">Resale value (reuse)</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center mx-auto mb-3">
@@ -217,14 +217,21 @@ const MaterialsCircularity = () => {
                 <p className="text-2xl font-display text-foreground">
                   {result.total_co2_saved_kg} kg
                 </p>
-                <p className="text-sm text-muted-foreground font-sans">CO₂ saved from landfill</p>
+                <p className="text-sm text-muted-foreground font-sans">CO₂ saved</p>
+              </div>
+              <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-tag-green-bg flex items-center justify-center mx-auto mb-3">
+                  <Package className="w-5 h-5 text-metric-green" />
+                </div>
+                <p className="text-2xl font-display text-foreground">{result.reuse_count}</p>
+                <p className="text-sm text-muted-foreground font-sans">Reusable items</p>
               </div>
               <div className="bg-card rounded-2xl border border-border p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-10 h-10 rounded-xl bg-tag-amber-bg flex items-center justify-center mx-auto mb-3">
-                  <Truck className="w-5 h-5 text-metric-amber" />
+                  <Recycle className="w-5 h-5 text-metric-amber" />
                 </div>
-                <p className="text-2xl font-display text-foreground">{result.items.length}</p>
-                <p className="text-sm text-muted-foreground font-sans">Items identified</p>
+                <p className="text-2xl font-display text-foreground">{result.recycle_count}</p>
+                <p className="text-sm text-muted-foreground font-sans">Recycle only</p>
               </div>
             </div>
 
