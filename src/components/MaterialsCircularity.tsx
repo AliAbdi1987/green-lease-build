@@ -9,7 +9,8 @@ import { toast } from "sonner";
 
 interface IdentifiedItem {
   name: string;
-  condition: string;
+  condition_rating: string;
+  condition_notes: string;
   estimated_value_sek: number;
   co2_saved_kg: number;
   description: string;
@@ -243,7 +244,7 @@ const MaterialsCircularity = () => {
                         Listed
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground font-sans mb-2">{item.condition}</p>
+                    <p className="text-sm text-muted-foreground font-sans mb-2">{item.condition_notes}</p>
                     <div className="flex gap-4 text-sm font-sans">
                       <span className="font-semibold text-metric-green">
                         {item.estimated_value_sek.toLocaleString("sv-SE")} SEK
