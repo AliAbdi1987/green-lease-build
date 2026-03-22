@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Leaf, FileText, Mail, Scale, Copy, Check, ExternalLink } from "lucide-react";
+import { Zap, Leaf, FileText, Mail, Scale, Copy, Check, ExternalLink, Brain, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
