@@ -184,6 +184,16 @@ const GreenLeaseCoach = () => {
     setStep("building");
   };
 
+  const seedRegulations = async () => {
+    if (regulationsSeeded) return;
+    try {
+      await supabase.functions.invoke("embed-regulations");
+      setRegulationsSeeded(true);
+    } catch {
+      // Non-critical: RAG will work without seeding if already done
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!sizeSqm || !heatingType) {
       toast({ title: "Missing info", description: "Please fill in building size and heating type.", variant: "destructive" });
@@ -192,6 +202,9 @@ const GreenLeaseCoach = () => {
 
     setLoading(true);
     try {
+      // Seed regulations in background (idempotent)
+      seedRegulations();
+
       // Collect all extracted bill data
       const extractedBills = uploadedFiles
         .filter(f => f.status === "done" && f.extractedData)
@@ -204,13 +217,17 @@ const GreenLeaseCoach = () => {
           postcode,
           avgBillSek: avgBillSek ? Number(avgBillSek) : undefined,
           extractedBills: extractedBills.length > 0 ? extractedBills : undefined,
+          projectId: projectId.current,
         },
       });
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      setResults(data);
+      // Separate agent steps from results
+      const { agent_steps, ...recommendationData } = data;
+      setAgentSteps(agent_steps || []);
+      setResults(recommendationData);
       setStep("results");
     } catch (e: any) {
       toast({ title: "Analysis failed", description: e.message || "Please try again.", variant: "destructive" });
