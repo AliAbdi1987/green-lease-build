@@ -8,7 +8,9 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <Hero />
-      <GreenLeaseCoach />
+      <div className="wave-divider">
+        <GreenLeaseCoach />
+      </div>
       <MaterialsCircularity />
       <Dashboard />
       <Footer />
