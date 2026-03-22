@@ -1,1 +1,13 @@
 project_id = "lmpxqdiktmibufzgrafg"
+
+[functions.recommend-actions]
+verify_jwt = false
+import_map = "./deno.json"
+
+[functions.embed-regulations]
+verify_jwt = false
+import_map = "./deno.json"
+
+[functions.extract-bill]
+verify_jwt = false
+import_map = "./deno.json"
